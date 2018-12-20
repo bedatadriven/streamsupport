@@ -56,9 +56,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 
-import build.IgnoreJava8API;
-
-import java8.util.Objects;
 import java8.util.function.Consumer;
 import java8.util.function.DoubleConsumer;
 import java8.util.function.IntConsumer;
@@ -93,8 +90,6 @@ public final class Spliterators {
     static final boolean IS_ANDROID = isAndroid();
     // is this an Apache Harmony-based Android? (defaults to false)
     static final boolean IS_HARMONY_ANDROID = IS_ANDROID && !isClassPresent("android.opengl.GLES32$DebugProc");
-    // is this Android O or later (defaults to false)
-    static final boolean IS_ANDROID_O = IS_ANDROID && isClassPresent("java.time.DateTimeException");
     // is this Java 6? (defaults to false - as of 1.4.2, Android doesn't get identified as Java 6 anymore!)
     static final boolean IS_JAVA6 = !IS_ANDROID && isJava6();
     // defaults to false
@@ -931,12 +926,6 @@ public final class Spliterators {
     public static <T> Spliterator<T> spliterator(Collection<? extends T> c) {
         Objects.requireNonNull(c);
 
-        if (HAS_STREAMS && (DELEGATION_ENABLED || IS_JAVA9) && !hasAndroid7LHMBug(c)) {
-            // always use spliterator delegation on Java 9 from 1.5.6 onwards
-            // https://sourceforge.net/p/streamsupport/tickets/299/
-            return delegatingSpliterator(c);
-        }
-
         String name = c.getClass().getName();
 
         if (c instanceof List) {
@@ -1084,13 +1073,6 @@ public final class Spliterators {
         // default from j.u.Collection
         return spliterator(c, 0);
     }
-
-    @IgnoreJava8API
-    private static <T> Spliterator<T> delegatingSpliterator(Collection<? extends T> c) {
-        return new DelegatingSpliterator<T>(((Collection<T>) c).spliterator());
-    }
-
-    // Iterator-based spliterators
 
     /**
      * Creates a {@code Spliterator} using the given collection's
@@ -3421,44 +3403,4 @@ public final class Spliterators {
         return false;
     }
 
-    /**
-     * As of 2016-12-15 all Android 7.0, 7.1 and 7.1.1 releases (at least up to
-     * and including tag 7.1.1_r6) have a bug in LinkedHashMap's collection
-     * views' spliterators which correctly report that they are ORDERED but
-     * actually aren't ORDERED (instead the unordered HashMap spliterators are
-     * used). A fix for this bug has been merged into AOSP master on 2016-08-17
-     * but still hasn't been rolled out yet.
-     * <p>
-     * We'd want to avoid delegation to these flawed spliterators whenever
-     * possible and use the reflective implementation instead.
-     * <p>
-     * This check isn't 100% fool-proof as the LinkedHashMap (or its collection
-     * view) could be wrapped, for example in a j.u.Collections$UnmodifiableMap
-     * (whose UnmodifiableEntrySetSpliterator delegates back to the defective
-     * HashMap$EntrySpliterator). Since we can't know the wrapper beforehand
-     * this is as good as it can get.
-     * <p>
-     * Note that delegation will start to work automatically on Android 7.x
-     * releases that contain the above mentioned fix from AOSP master (this
-     * method will return {@code false} then).
-     * 
-     * @param c
-     *            the collection to check for the Android 7.x LinkedHashMap bug
-     * @return {@code true} if the argument is a Android 7.x LinkedHashMap
-     *         collection view that exhibits the unordered spliterator bug
-     */
-    @IgnoreJava8API
-    private static boolean hasAndroid7LHMBug(Collection<?> c) {
-        // is this Android API level 24 or 25?
-        if (IS_ANDROID && !(IS_HARMONY_ANDROID || IS_ANDROID_O)) {
-            String name = c.getClass().getName();
-            if (name.startsWith("java.util.HashMap$")) {
-                // Since it is a Collection this must be one of KeySet, Values
-                // or EnrySet. It is a bug (most likely a collection view from
-                // LinkedHashMap) if its Spliterator reports ORDERED!
-                return c.spliterator().hasCharacteristics(Spliterator.ORDERED);
-            }
-        }
-        return false;
-    }
 }
